@@ -1,0 +1,195 @@
+# Builds LightCraft (storytold/lightcraft) with the patches in patches/ applied, for macOS (Apple
+# Silicon) and Windows (x64), and publishes them as a GitHub Release named "<upstream tag>-custom".
+#
+# Runs every day: if LightCraft has a new release that we haven't built yet, it builds it.
+# Run it by hand from the Actions tab ("Run workflow") to build now, or to rebuild with "force".
+name: Build LightCraft (custom)
+
+on:
+  schedule:
+    - cron: "0 1 * * *" # 08:00 Thailand time
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream LightCraft tag to build (blank = latest release)"
+        required: false
+        default: ""
+      force:
+        description: "Rebuild even if this version was already built"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-lightcraft-custom
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: storytold/lightcraft
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  check:
+    name: Check for a new LightCraft release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      build: ${{ steps.v.outputs.build }}
+    steps:
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          tag="$INPUT_TAG"
+          if [ -z "$tag" ]; then
+            tag=$(gh release view -R "$UPSTREAM" --json tagName -q .tagName)
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag-custom" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "$FORCE" != "true" ]; then
+            echo "Already built $tag-custom; nothing to do."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Will build $tag with our patches."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: ${{ matrix.name }}
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    timeout-minutes: 120
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS (Apple Silicon), os: macos, runner: macos-latest, target: aarch64-apple-darwin }
+          - { name: Windows x64, os: windows, runner: windows-latest, target: x86_64-pc-windows-msvc }
+    steps:
+      - name: Check out LightCraft ${{ needs.check.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ needs.check.outputs.tag }}
+          persist-credentials: false
+
+      - name: Check out our patches
+        uses: actions/checkout@v4
+        with:
+          path: .custom
+          persist-credentials: false
+
+      - name: Apply patches
+        shell: bash
+        run: |
+          set -e
+          for p in .custom/patches/*.patch; do
+            echo "==> $p"
+            if git apply --whitespace=nowarn "$p"; then continue; fi
+            echo "git apply failed; trying a fuzzy apply"
+            if patch -p1 --forward --fuzz=3 --no-backup-if-mismatch < "$p"; then continue; fi
+            echo "::error title=Patch no longer applies::$p does not apply to LightCraft ${{ needs.check.outputs.tag }}. The upstream code changed where the patch edits; the patch needs updating."
+            exit 1
+          done
+          git diff --stat
+
+      - name: Name the app "LightCraft (mz)"
+        shell: bash
+        run: bash .custom/scripts/rename.sh
+
+      - name: Read the craft-fonts version LightCraft pins
+        id: fonts
+        shell: bash
+        run: |
+          ref=$(grep -ho 'craft-fonts-ref: *[0-9a-f]\{40\}' .github/workflows/release.yml | head -1 | awk '{print $2}')
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out craft-fonts
+        if: steps.fonts.outputs.ref != ''
+        uses: storytold/craft-common-actions/actions/checkout-craft-fonts@main
+        with:
+          ref: ${{ steps.fonts.outputs.ref }}
+
+      - name: Check out craft-i18n
+        uses: storytold/craft-common-actions/actions/checkout-craft-i18n@main
+
+      - id: rust
+        uses: storytold/craft-common-actions/actions/rust-channel@main
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust.outputs.toolchain }}
+          targets: ${{ steps.rust.outputs.targets }}
+          components: ${{ steps.rust.outputs.components }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: custom-${{ matrix.os }}
+
+      - name: Build macOS app (.dmg)
+        if: matrix.os == 'macos'
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+        run: packaging/macos/package.sh --arch aarch64
+
+      - name: Install WiX
+        if: matrix.os == 'windows'
+        uses: storytold/craft-common-actions/actions/install-wix@main
+
+      - name: Build Windows installer (.msi)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+        run: ./packaging/windows/package.ps1 -Arch x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lightcraft-${{ matrix.os }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.tag }}
+        run: |
+          # keep only the app installers, marked -mz so they can't be mixed up with official files
+          cd out
+          for f in *; do
+            case "$f" in
+              lightcraft-[0-9]*-macos-*.dmg|lightcraft-[0-9]*-windows-*.msi|lightcraft-[0-9]*-windows-*.zip) mv "$f" "${f/lightcraft-/lightcraft-mz-}" ;;
+              *) rm -f "$f" ;;
+            esac
+          done
+          cd ..
+          ls -la out
+          if [ -z "$(ls out)" ]; then echo "::error::no installers were built"; exit 1; fi
+          rel="$TAG-custom"
+          gh release delete "$rel" --cleanup-tag --yes 2>/dev/null || true
+          {
+            echo "LightCraft $TAG from https://github.com/$UPSTREAM/releases/tag/$TAG, with the patches in [patches/](patches/) applied."
+            echo
+            echo "- **Mac (Apple Silicon):** the \`.dmg\` file"
+            echo "- **Windows:** the \`.msi\` file (installer) or the \`.zip\` (portable)"
+            echo
+            echo "These builds are not signed by Apple/Microsoft. See the README for how to open them the first time."
+          } > notes.md
+          gh release create "$rel" --title "LightCraft (mz) $TAG" --notes-file notes.md --latest out/*

@@ -1,0 +1,61 @@
+diff --git a/crates/ui-egui/src/panels/detail.rs b/crates/ui-egui/src/panels/detail.rs
+index 2a6a83f..5e56285 100644
+--- a/crates/ui-egui/src/panels/detail.rs
++++ b/crates/ui-egui/src/panels/detail.rs
+@@ -1287,7 +1287,11 @@ pub(crate) fn zoomed(img: Rect, canvas: Rect) -> bool {
+ /// Fit ↔ the chosen click-zoom ratio at the clicked point, a drag pans when zoomed.
+ pub(crate) fn click_zoom_and_pan(app: &mut LightcraftApp, resp: &egui::Response, img: Rect, canvas: Rect) {
+     let zoomed = zoomed(img, canvas);
+-    if resp.double_clicked() || (resp.clicked() && !zoomed) {
++    // a single click only focuses the photo; a double-click toggles the zoom (Z / Space still do)
++    if resp.clicked() {
++        resp.request_focus();
++    }
++    if resp.double_clicked() {
+         if let Some(q) = resp.interact_pointer_pos() {
+             let u = ((q.x - img.left()) / img.width()).clamp(0.0, 1.0);
+             let v = ((q.y - img.top()) / img.height()).clamp(0.0, 1.0);
+@@ -1295,9 +1299,6 @@ pub(crate) fn click_zoom_and_pan(app: &mut LightcraftApp, resp: &egui::Response,
+         }
+         app.ui.zoom = if matches!(app.ui.zoom, Zoom::Fit) { Zoom::Percent(app.ui.click_zoom as f32) } else { Zoom::Fit };
+         app.ui.zoom_anim = true;
+-    } else if resp.clicked() && zoomed {
+-        app.ui.zoom = Zoom::Fit;
+-        app.ui.zoom_anim = true;
+     }
+     if zoomed && resp.dragged() {
+         pan_image(app, canvas, img, resp.drag_delta());
+diff --git a/crates/ui-egui/src/shortcuts.rs b/crates/ui-egui/src/shortcuts.rs
+index 9ab12fe..bd37490 100644
+--- a/crates/ui-egui/src/shortcuts.rs
++++ b/crates/ui-egui/src/shortcuts.rs
+@@ -339,9 +339,9 @@ fn keyboard_owned(app: &LightcraftApp, ctx: &egui::Context) -> bool {
+         return ctx.input(|input| input.key_pressed(Key::Escape))
+             && app.widgets.iter().any(|(widget, _)| widget.starts_with("sliderField:") && crate::text_field::was_editing(ctx, widget));
+     }
+-    // a selected slider keeps its arrow keys; everything else is a shortcut
++    // a selected slider keeps Up / Down (it nudges with those); Left / Right still change the photo
+     if crate::widgets::slider_has_focus(ctx) {
+-        return ctx.input(|input| [Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown].iter().any(|key| input.key_pressed(*key)));
++        return ctx.input(|input| [Key::ArrowUp, Key::ArrowDown].iter().any(|key| input.key_pressed(*key)));
+     }
+     // a handle on the photo keeps the arrows (it moves) and Return / Space (it acts)
+     if crate::canvas_keys::has_focus(ctx) {
+diff --git a/crates/ui-egui/src/widgets.rs b/crates/ui-egui/src/widgets.rs
+index 3101a93..7c16b24 100644
+--- a/crates/ui-egui/src/widgets.rs
++++ b/crates/ui-egui/src/widgets.rs
+@@ -392,6 +392,13 @@ fn update_wheel_arming(ui: &mut Ui, id: egui::Id, resp: &egui::Response, row: Re
+         resp.request_focus();
+         ui.data_mut(|d| d.insert_temp(focused_slider_key(), id));
+     }
++    // Hold Left / Right while the slider is focused, so egui's arrow-key focus traversal doesn't
++    // walk focus onto the dock's resize handle; the shortcut pass turns them into photo changes.
++    if resp.has_focus() {
++        ui.memory_mut(|m| {
++            m.set_focus_lock_filter(resp.id, egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() })
++        });
++    }
+     // A drag that leaves the row disarms too (it keeps dragging: that needs no wheel selection),
+     // and one that only starts once the pointer is outside doesn't arm it again.
+     if selected && pointer_in_row && !left_row {
