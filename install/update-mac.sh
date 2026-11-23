@@ -11,16 +11,27 @@ set -euo pipefail
 REPO="zneb076/lightcraft-custom"
 APP="${LIGHTCRAFT_MZ_APP:-/Applications/LightCraft (mz).app}"
 FORCE=0
-[ "${1:-}" = "--force" ] && FORCE=1
+AUTO=0
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    --auto) AUTO=1 ;; # daily background run: never quits the app, tells you with a notification
+  esac
+done
 
-say() { printf '==> %s\n' "$*"; }
-die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+say() { printf '%s==> %s\n' "$([ "$AUTO" = 1 ] && date '+%F %T ')" "$*"; }
+notify() { [ "$AUTO" = 1 ] && osascript -e "display notification \"$1\" with title \"LightCraft (mz)\"" >/dev/null 2>&1 || true; }
+die() { printf 'Error: %s\n' "$*" >&2; notify "Update failed: $*"; exit 1; }
 
 [ "$(uname -s)" = "Darwin" ] || die "this script is for macOS."
 [ "$(uname -m)" = "arm64" ] || die "these builds are for Apple Silicon Macs (M1 or newer) only."
 
 say "Checking the latest LightCraft (mz) release"
-json=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest") || die "couldn't reach GitHub."
+if ! json=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest"); then
+  # offline or GitHub down: in the daily run, just try again tomorrow
+  [ "$AUTO" = 1 ] && { say "couldn't reach GitHub; will try next time"; exit 0; }
+  die "couldn't reach GitHub."
+fi
 tag=$(printf '%s' "$json" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 url=$(printf '%s' "$json" | grep -o '"browser_download_url": *"[^"]*macos-aarch64\.dmg"' | head -1 | sed 's/.*"\(https[^"]*\)"$/\1/')
 [ -n "$tag" ] && [ -n "$url" ] || die "the latest release has no Mac download."
@@ -32,6 +43,16 @@ if [ -f "$APP/Contents/Info.plist" ]; then
 fi
 if [ "$installed" = "$latest" ] && [ "$FORCE" = 0 ]; then
   say "LightCraft (mz) $installed is already the latest version."
+  exit 0
+fi
+# the daily run doesn't install over an app you're using: it tells you and tries again next time
+if [ "$AUTO" = 1 ] && pgrep -f "$APP/Contents/MacOS/" >/dev/null; then
+  say "$latest is available but LightCraft (mz) is open; will install next time"
+  seen="$HOME/Library/Application Support/LightCraft-mz/told-$latest"
+  if [ ! -e "$seen" ]; then # say so once per version, not on every check
+    mkdir -p "$(dirname "$seen")" && touch "$seen"
+    notify "Version $latest is ready. It installs by itself once LightCraft (mz) is closed."
+  fi
   exit 0
 fi
 say "Installing LightCraft (mz) $latest${installed:+ (replacing $installed)}"
@@ -72,6 +93,7 @@ xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 codesign --verify --deep "$APP" || die "the installed app failed its signature check."
 
 say "Done: LightCraft (mz) $latest is in $(dirname "$APP")"
+notify "Updated to version $latest."
 if [ "$was_running" = 1 ]; then
   open "$APP"
 fi

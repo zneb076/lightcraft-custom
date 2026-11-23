@@ -55,3 +55,11 @@ irm https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/upd
 ```
 
 Windows asks for administrator permission while it installs.
+
+### Automatic updates on Mac
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/auto-update-mac.sh | bash
+```
+
+Checks every 3 hours (and at login) and installs a new LightCraft (mz) by itself, with a notification. If the app is open it waits until it's closed; it never quits the app on you. Log: `~/Library/Logs/lightcraft-mz-update.log`. Turn it off with the same command plus `-s -- --off`.
