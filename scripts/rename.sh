@@ -26,6 +26,8 @@ edit() {
 edit apps/lightcraft/src/main.rs           's/with_title\("LightCraft"\)/with_title("$ENV{NAME}")/'
 edit apps/lightcraft/src/native_menu.rs    's/Submenu::new\("LightCraft", true\)/Submenu::new("$ENV{NAME}", true)/'
 edit crates/ui-egui/src/dialogs.rs         's/RichText::new\("LightCraft"\)\.font/RichText::new("$ENV{NAME}").font/'
+# About also links to this repo's README (what's changed, how updates work), so it's easy to find later
+edit crates/ui-egui/src/dialogs.rs         's/(ui\.label\(egui::RichText::new\("\Q$ENV{NAME}\E"\)[^\n]*\n)/$1            ui.hyperlink_to("Custom build: what changed and how updates work", "https:\/\/github.com\/zneb076\/lightcraft-custom#readme");\n/'
 
 # --- macOS: Dock / menu bar name, the .app name in the DMG, the DMG volume name -------------------
 edit packaging/macos/Info.plist.in 's|(<key>CFBundleDisplayName</key>\s*<string>)LightCraft(</string>)|$1$ENV{NAME}$2|'

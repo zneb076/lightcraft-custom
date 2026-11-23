@@ -191,5 +191,7 @@ jobs:
             echo "- **Windows:** the \`.msi\` file (installer) or the \`.zip\` (portable)"
             echo
             echo "These builds are not signed by Apple/Microsoft. See the README for how to open them the first time."
+            echo
+            echo "📌 What to do when there's an update (คู่มือ): https://github.com/$GITHUB_REPOSITORY#readme"
           } > notes.md
           gh release create "$rel" --title "LightCraft (mz) $TAG" --notes-file notes.md --latest out/*

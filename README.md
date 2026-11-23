@@ -2,6 +2,42 @@
 
 A personal build of [LightCraft](https://github.com/storytold/lightcraft) (MIT / Apache-2.0) with a few changes, built automatically for macOS and Windows.
 
+---
+
+## 📌 คู่มือฉบับย่อ: มีอัปเดตแล้วต้องทำอะไร
+
+> เปิดหน้านี้ได้จากในแอป: **LightCraft (mz) → About** แล้วกดลิงก์ "Custom build: what changed and how updates work"
+
+### ปกติ: ไม่ต้องทำอะไรเลย
+
+1. LightCraft ตัวทางการออกเวอร์ชันใหม่
+2. **GitHub build ตัว (mz) ให้อัตโนมัติ** เช็กทุกวัน 08:00 แล้วไฟล์ใหม่จะขึ้นที่ [Releases](../../releases/latest)
+3. **Mac ติดตั้งให้เองอัตโนมัติ** เช็กทุก 3 ชั่วโมงและตอนเปิดเครื่อง จะมีแจ้งเตือน "Updated to version …"
+   - ถ้าแอปเปิดอยู่ จะไม่ปิดแอปให้ แต่จะขึ้นแจ้งเตือนว่ามีเวอร์ชันใหม่ และติดตั้งเองหลังจากปิดแอป
+4. **Windows ต้องอัปเดตเอง** เปิด PowerShell แล้ววางคำสั่งนี้:
+   ```powershell
+   irm https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/update-windows.ps1 | iex
+   ```
+
+### ต้องทำอะไรบางอย่างเฉพาะกรณีเหล่านี้
+
+| เจออะไร | ทำอะไร |
+|---|---|
+| อีเมลจาก GitHub ว่า **"Build LightCraft (custom)" failed** และในหน้านั้นมีคำว่า *Patch no longer applies* หรือ *Rename no longer applies* | ตัวทางการแก้โค้ดตรงที่เราแก้ไว้ เลยต้องปรับ patch ใหม่ ให้เปิด Claude Code แล้วบอกว่า *"build ของ github.com/zneb076/lightcraft-custom fail เพราะ patch ใส่ไม่ได้ ช่วยแก้ให้หน่อย"* ระหว่างนี้ตัวเก่ายังใช้ได้ตามปกติ |
+| อีเมลจาก GitHub ว่า **scheduled workflow will be disabled** (มาประมาณทุก 60 วัน ถ้า repo ไม่มีการเปลี่ยนแปลง) | กดปุ่มในอีเมลเพื่อเปิดต่อ หรือเข้า **Actions → Build LightCraft (custom)** แล้วกด **Enable workflow** ถ้าไม่ทำ จะไม่มี build ใหม่ |
+| แจ้งเตือนบน Mac ว่า **"Update failed"** | ดูสาเหตุในไฟล์ `~/Library/Logs/lightcraft-mz-update.log` หรือรันคำสั่งอัปเดตเอง (ดูด้านล่าง) |
+| อยากได้เวอร์ชันใหม่ทันที ไม่อยากรอ | ใน repo ไปที่ **Actions → Build LightCraft (custom) → Run workflow** รอประมาณ 20 นาที แล้วบน Mac รัน: `curl -fsSL https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/update-mac.sh \| bash` |
+| ซื้อ Mac ใหม่ หรือลงเครื่องใหม่ | รันคำสั่งนี้ครั้งเดียว จะติดตั้งแอปและเปิดอัปเดตอัตโนมัติให้: `curl -fsSL https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/update-mac.sh \| bash && curl -fsSL https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/auto-update-mac.sh \| bash` |
+| อยากปิดการอัปเดตอัตโนมัติบน Mac | `curl -fsSL https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/auto-update-mac.sh \| bash -s -- --off` |
+
+### ข้อควรระวัง
+
+- **อย่าอัปเดต LightCraft ตัวทางการก่อนตัว (mz)** ทั้งสองตัวใช้ catalog และ settings ชุดเดียวกัน ถ้าตัวทางการเวอร์ชันใหม่ไปอัปเกรด catalog ไปก่อน ตัว (mz) เวอร์ชันเก่าอาจเปิดไม่ได้ ง่ายที่สุดคือใช้แต่ตัว (mz)
+- **อย่าเปิดทั้งสองตัวพร้อมกัน**
+- บน Windows ตัว (mz) กับตัวทางการติดตั้งทับกัน ลงตัวไหนตัวนั้นจะแทนที่อีกตัว
+
+---
+
 ## Changes
 
 1. **A single click on the photo no longer zooms.** It only focuses the photo. Double-click, `Z` or Space still toggle the zoom.
