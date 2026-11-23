@@ -37,3 +37,21 @@ xattr -dr com.apple.quarantine "/Applications/LightCraft (mz).app"
 (or: try to open it, then **System Settings → Privacy & Security → Open Anyway**).
 
 **Windows:** run the `.msi`. If SmartScreen says "Windows protected your PC", click **More info → Run anyway**. The installer replaces an installed official LightCraft (they share an install), and the official installer replaces this one.
+
+## Updating with one command
+
+**Mac** (Terminal):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/update-mac.sh | bash
+```
+
+It installs the latest LightCraft (mz) if it's newer than the one you have (or installs it the first time), quits and reopens the app if it's open, and needs no `xattr` step. Run it again any time; it does nothing when you're up to date.
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/zneb076/lightcraft-custom/main/install/update-windows.ps1 | iex
+```
+
+Windows asks for administrator permission while it installs.
